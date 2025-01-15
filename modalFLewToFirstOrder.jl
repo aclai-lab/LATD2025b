@@ -27,7 +27,8 @@ end
 Translate the α-satisfiability problem for modal FLew-algebra formulae into two-sorted
 first-order using smt-lib syntax and calling an smt-solver.
 """
-function translate(φ::F,
+function translate(
+    φ::F,
     α::FiniteIndexTruth,
     algebra::FiniteIndexFLewAlgebra{N};
     solver::String="z3"
@@ -85,9 +86,9 @@ function translate(φ::F,
 
     w = Interval(Point("x"),Point("y"))
     atoms = Vector{Atom}()
-    translation = translate(φ, w, α, algebra, atoms)
+    translation = translategeq(φ, w, α, algebra, atoms)
     for p ∈ atoms
-        smtfile *= "(declare-fun P (W W A) Bool)\n"
+        smtfile *= "(declare-fun $(p.value) (W W) A)\n"
     end
     smtfile *= "(assert (exists ((x W) (y W)) $(translation)))\n"
 
@@ -138,37 +139,320 @@ function translate(
     translate(φ, α, a; solver)
 end
 
-function translate(
+"""
+    translategeq(
+        p::Atom,
+        w::Interval,
+        α::Union{FiniteIndexTruth, FiniteTruth},
+        a::FiniteIndexFLewAlgebra{N},
+        atoms::Vector{Atom};
+        solver::String="z3"
+    ) where {
+        N
+    }
+
+||p||_x ⪰ α = P(x) ⪰ α
+
+For each atom p, there is a P(x) that returns a value from the algebra corresponing to the
+value of p at the world x.
+"""
+function translategeq(
     p::Atom,
     w::Interval,
-    _::FiniteIndexTruth,
-    _::FiniteIndexFLewAlgebra{N},
-    atoms::Vector{Atom}
+    α::Union{FiniteIndexTruth, FiniteTruth},
+    a::FiniteIndexFLewAlgebra{N},
+    atoms::Vector{Atom};
+    solver::String="z3"
 ) where {
     N
 }
     if p ∉ atoms push!(atoms, p) end
-    smtfile = "(or"
-    for value in 1:N
-        smtfile *= " (P $(w.x.value) $(w.y.value) a$value)"
+    if isa(α, FiniteIndexTruth)
+        return "(precedeq a$(α.index) ($(p.value) $(w.x.value) $(w.y.value)))"
+    elseif isa(α, FiniteTruth)
+        return "(precedeq $(α.label) ($(p.value) $(w.x.value) $(w.y.value)))"
+    else
+        error("Something went wrong")
     end
-    smtfile *= ")"
-    return smtfile
 end
 
-function translate(
+"""
+    translateleq(
+        p::Atom,
+        w::Interval,
+        α::Union{FiniteIndexTruth, FiniteTruth},
+        a::FiniteIndexFLewAlgebra{N},
+        atoms::Vector{Atom};
+        solver::String="z3"
+    ) where {
+        N
+    }
+
+||p||_x ⪯ α = P(x) ⪯ α
+
+For each atom p, there is a P(x) that returns a value from the algebra corresponing to the
+value of p at the world x.
+"""
+function translateleq(
+    p::Atom,
+    w::Interval,
+    α::Union{FiniteIndexTruth, FiniteTruth},
+    a::FiniteIndexFLewAlgebra{N},
+    atoms::Vector{Atom};
+    solver::String="z3"
+) where {
+    N
+}
+    if p ∉ atoms push!(atoms, p) end
+    if isa(α, FiniteIndexTruth)
+        return "(precedeq ($(p.value) $(w.x.value) $(w.y.value)) a$(α.index))"
+    elseif isa(α, FiniteTruth)
+        return "(precedeq ($(p.value) $(w.x.value) $(w.y.value)) $(α.label))"
+    else
+        error("Something went wrong")
+    end
+end
+
+"""
+    translategeq(
+        β::T,
+        w::Interval,
+        α::Union{FiniteIndexTruth, FiniteTruth},
+        a::FiniteIndexFLewAlgebra{N},
+        atoms::Vector{Atom};
+        solver::String="z3"
+    ) where {
+        T<:Truth,
+        N
+    }
+
+||β||_x ⪰ α = β ⪰ α
+"""
+function translategeq(
     β::T,
-    _::Interval,
-    α::FiniteIndexTruth,
-    _::FiniteIndexFLewAlgebra,
-    atoms::Vector{Atom}
+    w::Interval,
+    α::Union{FiniteIndexTruth, FiniteTruth},
+    a::FiniteIndexFLewAlgebra{N},
+    atoms::Vector{Atom};
+    solver::String="z3"
+) where {
+    T<:Truth,
+    N
+}
+    if !isa(β, FiniteIndexTruth) β = convert(FiniteIndexTruth, β) end
+    if isa(α, FiniteIndexTruth)
+        return "(precedeq a$(α.index) a$(β.index))"
+    elseif isa(α, FiniteTruth)
+        return "(precedeq $(α.label) a$(β.index))"
+    else
+        error("Something went wrong")
+    end
+end
+
+"""
+    translateleq(
+        β::T,
+        w::Interval,
+        α::Union{FiniteIndexTruth, FiniteTruth},
+        a::FiniteIndexFLewAlgebra{N},
+        atoms::Vector{Atom};
+        solver::String="z3"
+    ) where {
+        T<:Truth,
+        N
+    }
+
+||β||_x ⪯ α = β ⪯ α
+"""
+function translateleq(
+    β::T,
+    w::Interval,
+    α::Union{FiniteIndexTruth, FiniteTruth},
+    a::FiniteIndexFLewAlgebra,
+    atoms::Vector{Atom};
+    solver::String="z3"
 ) where {
     T<:Truth
 }
     if !isa(β, FiniteIndexTruth) β = convert(FiniteIndexTruth, β) end
-    return "(precedeq a$(α.index) a$(β.index))"
+    if isa(α, FiniteIndexTruth)
+        return "(precedeq a$(β.index) a$(α.index))"
+    elseif isa(α, FiniteTruth)
+        return "(precedeq a$(β.index) $(α.label))"
+    else
+        error("Something went wrong")
+    end
 end
 
+"""
+    function translategeq(
+        φ::SyntaxBranch,
+        w::Interval,
+        α::Union{FiniteIndexTruth, FiniteTruth},
+        algebra::FiniteIndexFLewAlgebra{N},
+        atoms::Vector{Atom};
+        solver::String="z3"
+    ) where {
+        N
+    }
+
+||φ∧ψ|| ⪰ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪰a)∧(||φ||_x⪰b)∧(a⋅b⪰α))
+||φ∨ψ|| ⪰ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪰a)∧(||φ||_x⪰b)∧(a+b⪰α))
+||φ→ψ|| ⪰ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪯a)∧(||φ||_x⪰b)∧(a↪b⪰α))
+"""
+function translategeq(
+    φ::SyntaxBranch,
+    w::Interval,
+    α::Union{FiniteIndexTruth, FiniteTruth},
+    algebra::FiniteIndexFLewAlgebra{N},
+    atoms::Vector{Atom};
+    solver::String="z3"
+) where {
+    N
+}
+    if isa(φ.token, typeof(∧)) || isa(φ.token, typeof(∨)) || isa(φ.token, typeof(→))
+        (ψ, ε) = φ.children
+        (a, b) = FiniteTruth.(["a", "b"])
+        smtfile = "(exists ((a A) (b A)) (and "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= a a$i)")
+        end
+        smtfile *= ") (or"
+        for i ∈ 1:N
+            smtfile *= (" (= b a$i)")
+        end
+        smtfile *= ") "
+        if isa(φ.token, typeof(∧))
+            smtfile *= "$(translategeq(ψ, w, a, algebra, atoms; solver)) "
+            smtfile *= "$(translategeq(ε, w, b, algebra, atoms; solver)) "
+            if isa(α, FiniteIndexTruth)
+                smtfile *= "(precedeq a$(α.index) (monoid a b))))"
+            elseif isa(α, FiniteTruth)
+                smtfile *= "(precedeq $(α.label) (monoid a b))))"
+            else
+                error("Something went wrong")
+            end
+        elseif isa(φ.token, typeof(∨))
+            smtfile *= "$(translategeq(ψ, w, a, algebra, atoms; solver)) "
+            smtfile *= "$(translategeq(ε, w, b, algebra, atoms; solver)) "
+            if isa(α, FiniteIndexTruth)
+                smtfile *= "(precedeq a$(α.index) (join a b))))"
+            elseif isa(α, FiniteTruth)
+                smtfile *= "(precedeq $(α.label) (join a b))))"
+            else
+                error("Something went wrong")
+            end
+        elseif isa(φ.token, typeof(→))
+            smtfile *= "$(translateleq(ψ, w, a, algebra, atoms; solver)) "
+            smtfile *= "$(translategeq(ε, w, b, algebra, atoms; solver)) "
+            if isa(α, FiniteIndexTruth)
+                smtfile *= "(precedeq a$(α.index) (implication a b))))"
+            elseif isa(α, FiniteTruth)
+                smtfile *= "(precedeq $(α.label) (implication a b))))"
+            else
+                error("Something went wrong")
+            end
+        else
+            error("Something went wrong")
+        end
+    else
+        error("Something went wrong")
+    end    
+end
+
+"""
+    function translateleq(
+        φ::SyntaxBranch,
+        w::Interval,
+        α::Union{FiniteIndexTruth, FiniteTruth},
+        algebra::FiniteIndexFLewAlgebra{N},
+        atoms::Vector{Atom};
+        solver::String="z3"
+    ) where {
+        N
+    }
+
+||φ∧ψ|| ⪯ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪯a)∧(||φ||_x⪯b)∧(a⋅b⪯α))
+||φ∨ψ|| ⪯ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪯a)∧(||φ||_x⪯b)∧(a+b⪯α))
+||φ→ψ|| ⪯ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪰a)∧(||φ||_x⪯b)∧(a↪b⪯α))
+"""
+function translateleq(
+    φ::SyntaxBranch,
+    w::Interval,
+    α::Union{FiniteIndexTruth, FiniteTruth},
+    algebra::FiniteIndexFLewAlgebra{N},
+    atoms::Vector{Atom};
+    solver::String="z3"
+) where {
+    N
+}
+    if isa(φ.token, typeof(∧)) || isa(φ.token, typeof(∨)) || isa(φ.token, typeof(→))
+        (ψ, ε) = φ.children
+        (a, b) = FiniteTruth.(["a", "b"])
+        smtfile = "(exists ((a A) (b A)) (and "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= a a$i)")
+        end
+        smtfile *= ") (or"
+        for i ∈ 1:N
+            smtfile *= (" (= b a$i)")
+        end
+        smtfile *= ") "
+        if isa(φ.token, typeof(∧))
+            smtfile *= "$(translateleq(ψ, w, a, algebra, atoms; solver)) "
+            smtfile *= "$(translateleq(ε, w, b, algebra, atoms; solver)) "
+            if isa(α, FiniteIndexTruth)
+                smtfile *= "(precedeq (monoid a b) a$(α.index))))"
+            elseif isa(α, FiniteTruth)
+                smtfile *= "(precedeq (monoid a b) $(α.label))))"
+            else
+                error("Something went wrong")
+            end
+        elseif isa(φ.token, typeof(∨))
+            smtfile *= "$(translateleq(ψ, w, a, algebra, atoms; solver)) "
+            smtfile *= "$(translateleq(ε, w, b, algebra, atoms; solver)) "
+            if isa(α, FiniteIndexTruth)
+                smtfile *= "(precedeq (join a b) a$(α.index))))"
+            elseif isa(α, FiniteTruth)
+                smtfile *= "(precedeq (join a b) $(α.label))))"
+            else
+                error("Something went wrong")
+            end
+        elseif isa(φ.token, typeof(→))
+            smtfile *= "$(translategeq(ψ, w, a, algebra, atoms; solver)) "
+            smtfile *= "$(translateleq(ε, w, b, algebra, atoms; solver)) "
+            if isa(α, FiniteIndexTruth)
+                smtfile *= "(precedeq (implication a b) a$(α.index))))"
+            elseif isa(α, FiniteTruth)
+                smtfile *= "(precedeq (implication a b) $(α.label))))"
+            else
+                error("Something went wrong")
+            end
+        else
+            error("Something went wrong")
+        end
+    else
+        error("Something went wrong")
+    end    
+end
+
+"""
+    alphasat(
+        α::T,
+        φ::F,
+        algebra::A;
+        solver::String="z3"
+    ) where {
+        T<:Truth,
+        F<:Formula,
+        A<:AbstractAlgebra
+    }
+
+Check α-satisfiability of the formula `φ` for a given value `α` from an algebra `algebra`
+using an smt solver (default=`z3`).
+"""
 function alphasat(
     α::T,
     φ::F,
@@ -182,6 +466,11 @@ function alphasat(
     return translate(φ, α, algebra; solver)
 end
 
+"""
+    sat(φ::F, algebra::A; solver::String="z3")
+
+Check 1-satisfiability of the formula `φ` using an smt solver (default=`z3`).
+"""
 function sat(φ::F, algebra::A; solver::String="z3") where {F<:Formula, A<:AbstractAlgebra}
     alphasat(⊤, φ, algebra; solver)
 end
