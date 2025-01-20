@@ -464,50 +464,45 @@ function translategeq(
         smtfile *= ") "
         if isa(α, FiniteIndexTruth)
             smtfile *= "(precedeq a$(α.index) $(x.label)) (forall (($(y.label) A)) (=> "
-            smtfile *= "(or"
-            for i ∈ 1:N
-                smtfile *= (" (= $(y.label) a$i)")
-            end
-            smtfile *= ") (= (precedeq $(x.label) $(y.label)) "
-            smetilfe *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
-            smtfile *= "(or"
-            for i ∈ 1:N
-                smtfile *= (" (= $(z.label) a$i)")
-            end
-            smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
-            smtfile *= "(or"
-            for i ∈ 1:N
-                smtfile *= (" (= $(t.label) a$i)")
-            end
-            smtfile *= ") $(translategeq(ψ, s, t, algebra, atoms, depth+1; solver))) "
-            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
-            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
         elseif isa(α, FiniteTruth)
             smtfile *= "(precedeq $(α.label) $(x.label)) (forall (($(y.label) A)) (=> "
-            smtfile *= "(or"
-            for i ∈ 1:N
-                smtfile *= (" (= $(y.label) a$i)")
-            end
-            smtfile *= ") (= (precedeq $(x.label) $(y.label)) "
-            smetilfe *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
-            smtfile *= "(or"
-            for i ∈ 1:N
-                smtfile *= (" (= $(z.label) a$i)")
-            end
-            smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
-            smtfile *= "(or"
-            for i ∈ 1:N
-                smtfile *= (" (= $(t.label) a$i)")
-            end
-            smtfile *= ") $(translategeq(ψ, s, t, algebra, atoms, depth+1; solver))) "
-            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
-            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
         else
             error("Something went wrong")
         end
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(y.label) a$i)")
+        end
+        if isa(φ.token, DiamondRelationalConnective)
+            smtfile *= ") (= (precedeq $(x.label) $(y.label)) "
+        elseif isa(φ.token, BoxRelationalConnective)
+            smtfile *= ") (= (precedeq $(y.label) $(x.label)) "
+        else
+            error("Something went wrong")
+        end
+        smtfile *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(z.label) a$i)")
+        end
+        smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(t.label) a$i)")
+        end
+        smtfile *= ") $(translategeq(ψ, s, t, algebra, atoms, depth+1; solver))) "
+        if isa(φ.token, DiamondRelationalConnective)
+            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+        elseif isa(φ.token, BoxRelationalConnective)
+            smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
+        else
+            error("Something went wrong")
+        end
+        smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
     else
         error("Something went wrong")
-    end    
+    end 
+    return smtfile   
 end
 
 """
@@ -583,10 +578,57 @@ function translateleq(
             error("Something went wrong")
         end
     elseif isa(φ.token, DiamondRelationalConnective) || isa(φ.token, BoxRelationalConnective)
-        error("diamond or box")
+        r = SoleLogics.relation(φ.token)
+        ψ = φ.children[1]
+        s = Interval(Point("w$(depth)x"), Point("w$(depth)y"))
+        (x, y, z, t) = FiniteTruth.(["x$depth", "y$depth", "z$depth", "t$depth"])
+        smtfile = "(exists (($(x.label) A)) (and "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(x.label) a$i)")
+        end
+        smtfile *= ") "
+        if isa(α, FiniteIndexTruth)
+            smtfile *= "(precedeq $(x.label) a$(α.index)) (forall (($(y.label) A)) (=> "
+        elseif isa(α, FiniteTruth)
+            smtfile *= "(precedeq $(x.label) $(α.label)) (forall (($(y.label) A)) (=> "
+        else
+            error("Something went wrong")
+        end
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(y.label) a$i)")
+        end
+        if isa(φ.token, DiamondRelationalConnective)
+            smtfile *= ") (= (precedeq $(x.label) $(y.label)) "
+        elseif isa(φ.token, BoxRelationalConnective)
+            smtfile *= ") (= (precedeq $(y.label) $(x.label)) "
+        else
+            error("Something went wrong")
+        end
+        smtfile *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(z.label) a$i)")
+        end
+        smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(t.label) a$i)")
+        end
+        smtfile *= ") $(translateleq(ψ, s, t, algebra, atoms, depth+1; solver))) "
+        if isa(φ.token, DiamondRelationalConnective)
+            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+        elseif isa(φ.token, BoxRelationalConnective)
+            smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
+        else
+            error("Something went wrong")
+        end
+        smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
     else
         error("Something went wrong")
-    end    
+    end   
+    return smtfile 
 end
 
 """
