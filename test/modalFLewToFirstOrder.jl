@@ -1,3 +1,4 @@
+using SoleLogics
 using SoleLogics.ManyValuedLogics: α
 using SoleLogics.ManyValuedLogics: G3
 

@@ -520,7 +520,8 @@ function translateleq(
     w::Interval,
     α::Union{FiniteIndexTruth, FiniteTruth},
     algebra::FiniteIndexFLewAlgebra{N},
-    atoms::Vector{Atom};
+    atoms::Vector{Atom},
+    depth::Int;
     solver::String="z3"
 ) where {
     N

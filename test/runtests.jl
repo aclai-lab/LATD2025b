@@ -1,7 +1,7 @@
 using Test
 using Random
 
-include("../src/modalFLewToFirstOrder.jl")
+using ModalFLewToFirstOrder
 
 function run_tests(list)
     println("\n" * ("#"^50))
@@ -15,6 +15,7 @@ println("Julia version: ", VERSION)
 
 test_suites = [
     ("ModalFLewToFirstOrder", ["modalFLewToFirstOrder.jl",]),
+    ("SoleReasonersComparison", ["soleReasonersComparison.jl"]),
 ]
 
 @testset "LATD2025B.jl" begin
