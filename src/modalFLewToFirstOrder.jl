@@ -170,7 +170,7 @@ function translate(
     end
     if solver == "z3"
         run(pipeline(`z3 $(tempdir())/temp$uuid.smt2`, stdout = b))
-        # rm("$(tempdir())/temp$uuid.smt2")
+        rm("$(tempdir())/temp$uuid.smt2")
         return take!(b) == UInt8[0x73, 0x61, 0x74, 0x0a]
     else
         rm("$(tempdir())/temp$uuid.smt2")
@@ -236,19 +236,16 @@ function translategeq(
 ) where {
     N
 }
-    smtfile = ""
-    if p ∉ atoms
-        push!(atoms, p)
-        smtfile *= "(or"
-        for i ∈ 1:N
-            smtfile *= (" (= ($(p.value) $(w.x.label) $(w.y.label)) a$i)")
-        end
-        smtfile *= ") "
+    if p ∉ atoms push!(atoms, p) end
+    smtfile = "(and (or"
+    for i ∈ 1:N
+        smtfile *= (" (= ($(p.value) $(w.x.label) $(w.y.label)) a$i)")
     end
+    smtfile *= ") "
     if isa(α, FiniteIndexTruth)
-        smtfile *= "(precedeq a$(α.index) ($(p.value) $(w.x.label) $(w.y.label)))"
+        smtfile *= "(precedeq a$(α.index) ($(p.value) $(w.x.label) $(w.y.label))))"
     elseif isa(α, FiniteTruth)
-        smtfile *=  "(precedeq $(α.label) ($(p.value) $(w.x.label) $(w.y.label)))"
+        smtfile *= "(precedeq $(α.label) ($(p.value) $(w.x.label) $(w.y.label))))"
     else
         error("Something went wrong")
     end
@@ -283,19 +280,16 @@ function translateleq(
 ) where {
     N
 }
-    smtfile = ""
-    if p ∉ atoms
-        push!(atoms, p)
-        smtfile *= "(or"
-        for i ∈ 1:N
-            smtfile *= (" (= ($(p.value) $(w.x.label) $(w.y.label)) a$i)")
-        end
-        smtfile *= ") "
+    if p ∉ atoms push!(atoms, p) end
+    smtfile = "(and (or"
+    for i ∈ 1:N
+        smtfile *= (" (= ($(p.value) $(w.x.label) $(w.y.label)) a$i)")
     end
+    smtfile *= ") "
     if isa(α, FiniteIndexTruth)
-        smtfile *= "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) a$(α.index))"
+        smtfile *= "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) a$(α.index)))"
     elseif isa(α, FiniteTruth)
-        smtfile *=  "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) $(α.label))"
+        smtfile *= "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) $(α.label)))"
     else
         error("Something went wrong")
     end
