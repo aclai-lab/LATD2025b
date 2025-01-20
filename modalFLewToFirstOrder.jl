@@ -5,12 +5,81 @@ using SoleLogics.ManyValuedLogics: FiniteIndexFLewAlgebra, FiniteIndexTruth
 using UUIDs
 
 struct Point
-    value::String
+    label::String
 end
 
 struct Interval
     x::Point
     y::Point
+end
+
+"""
+    releval(
+        r::R,
+        w::Interval,
+        s::Interval
+    ) where {
+        R<:AbstractRelation
+    }
+
+Many-valued evaluation of the accessibility relation between worlds (x,y) and (z,t).
+
+The natural definition of many-valued Allen's relations. 
+For every X ∈ {A, Ai, L, Li, B, Bi, E, Ei, D, Di, O, Oi} we have RX: I(D)×I(D)→H defined by:
+
+ - RA([x,y],[z,t]) = =(y,z)
+ - RL([x,y],[z,t]) = <(y,z)
+ - RB([x,y],[z,t]) = =(x,z) ∩ <(t,y)
+ - RE([x,y],[z,t]) = <(x,z) ∩ =(y,t)
+ - RD([x,y],[z,t]) = <(x,z) ∩ <(t,y)
+ - RO([x,y],[z,t]) = <(x,z) ∩ <(z,y) ∩ <(y,t)
+
+and similarly for the inverse relations:
+
+- RAi([x,y],[z,t]) = =(t,x)
+- RLi([x,y],[z,t]) = <(t,x)
+- RBi([x,y],[z,t]) = =(z,x) ∩ <(y,t)
+- REi([x,y],[z,t]) = <(z,x) ∩ =(t,y)
+- RDi([x,y],[z,t]) = <(z,x) ∩ <(y,t)
+- ROi([x,y],[z,t]) = <(z,x) ∩ <(x,t) ∩ <(y,t)
+"""
+function releval(
+    r::R,
+    w::Interval,
+    s::Interval
+) where {
+    R<:AbstractRelation
+}
+    if r == SoleLogics.IA_A
+        smtfile = "(mveq $(w.y.label) $(s.x.label))"
+    elseif r == SoleLogics.IA_L
+        smtfile = "(mvlt $(w.y.label) $(s.x.label))"
+    elseif r == SoleLogics.IA_B
+        smtfile = "(monoid (mveq $(w.x.label) $(s.x.label)) (mvlt $(s.y.label) $(w.y.label)))"
+    elseif r == SoleLogics.IA_E
+        smtfile = "(monoid (mvlt $(w.x.label) $(s.x.label)) (mveq $(w.y.label) $(s.y.label)))"
+    elseif r == SoleLogics.IA_D
+        smtfile = "(monoid (mvlt $(w.x.label) $(s.x.label)) (mvlt $(s.y.label) $(w.y.label)))"
+    elseif r == SoleLogics.IA_O
+        smtfile = "(monoid (monoid (mvlt $(w.x.label) $(s.x.label)) "
+        smtfile *= "(mvlt $(s.x.label) $(w.y.label))) (mvlt $(w.y.label) $(s.y.label)))"
+    elseif r == SoleLogics.IA_Ai
+        smtfile = "(mveq $(s.y.label) $(w.x.label))"
+    elseif r == SoleLogics.IA_Li
+        smtfile = "(mvlt $(s.y.label) $(w.x.label))"
+    elseif r == SoleLogics.IA_Bi
+        smtfile = "(monoid (mveq $(s.x.label) $(w.x.label)) (mvlt $(w.y.label) $(s.y.label)))"
+    elseif r == SoleLogics.IA_Ei
+        smtfile = "(monoid (mvlt $(s.x.label) $(w.x.label)) (mveq $(s.y.label) $(w.y.label)))"
+    elseif r == SoleLogics.IA_Di
+        smtfile = "(monoid (mvlt $(s.x.label) $(w.x.label)) (mvlt $(w.y.label) $(s.y.label)))"
+    elseif r == SoleLogics.IA_Oi
+        smtfile = "(monoid (monoid (mvlt $(s.x.label) $(w.x.label)) "
+        smtfile *= "(mvlt $(w.x.label) $(s.y.label))) (mvlt $(s.y.label) $(w.y.label)))"
+    else
+        error("Relation $r not in HS")
+    end
+    return smtfile
 end
 
 """
@@ -84,13 +153,13 @@ function translate(
     smtfile *= "(assert (forall ((x W) (y W)) "
     smtfile *= "(=> (distinct (mveq x y) a2) (distinct (mvlt x y) a1))))\n"                                          
 
-    w = Interval(Point("x"),Point("y"))
+    w = Interval(Point("w0x"),Point("w0y"))
     atoms = Vector{Atom}()
-    translation = translategeq(φ, w, α, algebra, atoms)
+    translation = translategeq(φ, w, α, algebra, atoms, 0)
     for p ∈ atoms
         smtfile *= "(declare-fun $(p.value) (W W) A)\n"
     end
-    smtfile *= "(assert (exists ((x W) (y W)) $(translation)))\n"
+    smtfile *= "(assert (exists (($(w.x.label) W) ($(w.y.label) W)) $(translation)))\n"
 
     smtfile *= "(check-sat)"
     b = IOBuffer()
@@ -151,7 +220,7 @@ end
         N
     }
 
-||p||_x ⪰ α = P(x) ⪰ α
+τ(||p||_x ⪰ α) = P(x) ⪰ α
 
 For each atom p, there is a P(x) that returns a value from the algebra corresponing to the
 value of p at the world x.
@@ -161,16 +230,17 @@ function translategeq(
     w::Interval,
     α::Union{FiniteIndexTruth, FiniteTruth},
     a::FiniteIndexFLewAlgebra{N},
-    atoms::Vector{Atom};
+    atoms::Vector{Atom},
+    depth::Int;
     solver::String="z3"
 ) where {
     N
 }
     if p ∉ atoms push!(atoms, p) end
     if isa(α, FiniteIndexTruth)
-        return "(precedeq a$(α.index) ($(p.value) $(w.x.value) $(w.y.value)))"
+        return "(precedeq a$(α.index) ($(p.value) $(w.x.label) $(w.y.label)))"
     elseif isa(α, FiniteTruth)
-        return "(precedeq $(α.label) ($(p.value) $(w.x.value) $(w.y.value)))"
+        return "(precedeq $(α.label) ($(p.value) $(w.x.label) $(w.y.label)))"
     else
         error("Something went wrong")
     end
@@ -188,7 +258,7 @@ end
         N
     }
 
-||p||_x ⪯ α = P(x) ⪯ α
+τ(||p||_x ⪯ α) = P(x) ⪯ α
 
 For each atom p, there is a P(x) that returns a value from the algebra corresponing to the
 value of p at the world x.
@@ -198,16 +268,17 @@ function translateleq(
     w::Interval,
     α::Union{FiniteIndexTruth, FiniteTruth},
     a::FiniteIndexFLewAlgebra{N},
-    atoms::Vector{Atom};
+    atoms::Vector{Atom},
+    depth::Int;
     solver::String="z3"
 ) where {
     N
 }
     if p ∉ atoms push!(atoms, p) end
     if isa(α, FiniteIndexTruth)
-        return "(precedeq ($(p.value) $(w.x.value) $(w.y.value)) a$(α.index))"
+        return "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) a$(α.index))"
     elseif isa(α, FiniteTruth)
-        return "(precedeq ($(p.value) $(w.x.value) $(w.y.value)) $(α.label))"
+        return "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) $(α.label))"
     else
         error("Something went wrong")
     end
@@ -219,21 +290,23 @@ end
         w::Interval,
         α::Union{FiniteIndexTruth, FiniteTruth},
         a::FiniteIndexFLewAlgebra{N},
-        atoms::Vector{Atom};
+        atoms::Vector{Atom},
+        depth::Int;
         solver::String="z3"
     ) where {
         T<:Truth,
         N
     }
 
-||β||_x ⪰ α = β ⪰ α
+τ(||β||_x ⪰ α) = β ⪰ α
 """
 function translategeq(
     β::T,
     w::Interval,
     α::Union{FiniteIndexTruth, FiniteTruth},
     a::FiniteIndexFLewAlgebra{N},
-    atoms::Vector{Atom};
+    atoms::Vector{Atom},
+    depth::Int;
     solver::String="z3"
 ) where {
     T<:Truth,
@@ -255,21 +328,23 @@ end
         w::Interval,
         α::Union{FiniteIndexTruth, FiniteTruth},
         a::FiniteIndexFLewAlgebra{N},
-        atoms::Vector{Atom};
+        atoms::Vector{Atom},
+        depth::Int;
         solver::String="z3"
     ) where {
         T<:Truth,
         N
     }
 
-||β||_x ⪯ α = β ⪯ α
+τ(||β||_x ⪯ α) = β ⪯ α
 """
 function translateleq(
     β::T,
     w::Interval,
     α::Union{FiniteIndexTruth, FiniteTruth},
     a::FiniteIndexFLewAlgebra,
-    atoms::Vector{Atom};
+    atoms::Vector{Atom},
+    depth::Int;
     solver::String="z3"
 ) where {
     T<:Truth
@@ -290,69 +365,125 @@ end
         w::Interval,
         α::Union{FiniteIndexTruth, FiniteTruth},
         algebra::FiniteIndexFLewAlgebra{N},
-        atoms::Vector{Atom};
+        atoms::Vector{Atom},
+        depth::Int;
         solver::String="z3"
     ) where {
         N
     }
 
-||φ∧ψ|| ⪰ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪰a)∧(||φ||_x⪰b)∧(a⋅b⪰α))
-||φ∨ψ|| ⪰ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪰a)∧(||φ||_x⪰b)∧(a+b⪰α))
-||φ→ψ|| ⪰ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪯a)∧(||φ||_x⪰b)∧(a↪b⪰α))
+τ(||φ∧ψ||_w) ⪰ α = ∃x,y(A(x)∧A(y)∧τ(||φ||_w⪰x)∧τ(||φ||_w⪰y)∧(x⋅y⪰α))
+τ(||φ∨ψ||_w) ⪰ α = ∃x,y(A(x)∧A(y)∧τ(||φ||_w⪰x)∧τ(||φ||_w⪰y)∧(x+y⪰α))
+τ(||φ→ψ||_w) ⪰ α = ∃x,y(A(x)∧A(y)∧τ(||φ||_w⪯x)∧τ(||φ||_w⪰y)∧(x↪y⪰α))
 """
 function translategeq(
     φ::SyntaxBranch,
     w::Interval,
     α::Union{FiniteIndexTruth, FiniteTruth},
     algebra::FiniteIndexFLewAlgebra{N},
-    atoms::Vector{Atom};
+    atoms::Vector{Atom},
+    depth::Int;
     solver::String="z3"
 ) where {
     N
 }
     if isa(φ.token, typeof(∧)) || isa(φ.token, typeof(∨)) || isa(φ.token, typeof(→))
         (ψ, ε) = φ.children
-        (a, b) = FiniteTruth.(["a", "b"])
-        smtfile = "(exists ((a A) (b A)) (and "
+        (x, y) = FiniteTruth.(["x$depth", "y$depth"])
+        smtfile = "(exists (($(x.label) A) ($(y.label) A)) (and "
         smtfile *= "(or"
         for i ∈ 1:N
-            smtfile *= (" (= a a$i)")
+            smtfile *= (" (= $(x.label) a$i)")
         end
         smtfile *= ") (or"
         for i ∈ 1:N
-            smtfile *= (" (= b a$i)")
+            smtfile *= (" (= $(y.label) a$i)")
         end
         smtfile *= ") "
         if isa(φ.token, typeof(∧))
-            smtfile *= "$(translategeq(ψ, w, a, algebra, atoms; solver)) "
-            smtfile *= "$(translategeq(ε, w, b, algebra, atoms; solver)) "
+            smtfile *= "$(translategeq(ψ, w, x, algebra, atoms, depth+1; solver)) "
+            smtfile *= "$(translategeq(ε, w, y, algebra, atoms, depth+2; solver)) "
             if isa(α, FiniteIndexTruth)
-                smtfile *= "(precedeq a$(α.index) (monoid a b))))"
+                smtfile *= "(precedeq a$(α.index) (monoid $(x.label) $(y.label)))))"
             elseif isa(α, FiniteTruth)
-                smtfile *= "(precedeq $(α.label) (monoid a b))))"
+                smtfile *= "(precedeq $(α.label) (monoid $(x.label) $(y.label)))))"
             else
                 error("Something went wrong")
             end
         elseif isa(φ.token, typeof(∨))
-            smtfile *= "$(translategeq(ψ, w, a, algebra, atoms; solver)) "
-            smtfile *= "$(translategeq(ε, w, b, algebra, atoms; solver)) "
+            smtfile *= "$(translategeq(ψ, w, x, algebra, atoms, depth+1; solver)) "
+            smtfile *= "$(translategeq(ε, w, y, algebra, atoms, depth+2; solver)) "
             if isa(α, FiniteIndexTruth)
-                smtfile *= "(precedeq a$(α.index) (join a b))))"
+                smtfile *= "(precedeq a$(α.index) (join $(x.label) $(y.label)))))"
             elseif isa(α, FiniteTruth)
-                smtfile *= "(precedeq $(α.label) (join a b))))"
+                smtfile *= "(precedeq $(α.label) (join $(x.label) $(y.label)))))"
             else
                 error("Something went wrong")
             end
         elseif isa(φ.token, typeof(→))
-            smtfile *= "$(translateleq(ψ, w, a, algebra, atoms; solver)) "
-            smtfile *= "$(translategeq(ε, w, b, algebra, atoms; solver)) "
+            smtfile *= "$(translateleq(ψ, w, x, algebra, atoms, depth+1; solver)) "
+            smtfile *= "$(translategeq(ε, w, y, algebra, atoms, depth+2; solver)) "
             if isa(α, FiniteIndexTruth)
-                smtfile *= "(precedeq a$(α.index) (implication a b))))"
+                smtfile *= "(precedeq a$(α.index) (implication $(x.label) $(y.label)))))"
             elseif isa(α, FiniteTruth)
-                smtfile *= "(precedeq $(α.label) (implication a b))))"
+                smtfile *= "(precedeq $(α.label) (implication $(x.label) $(y.label)))))"
             else
                 error("Something went wrong")
             end
+        else
+            error("Something went wrong")
+        end
+    elseif isa(φ.token, DiamondRelationalConnective) || isa(φ.token, BoxRelationalConnective)
+        r = SoleLogics.relation(φ.token)
+        ψ = φ.children[1]
+        s = Interval(Point("w$(depth)x"), Point("w$(depth)y"))
+        (x, y, z, t) = FiniteTruth.(["x$depth", "y$depth", "z$depth", "t$depth"])
+        smtfile = "(exists (($(x.label) A)) (and "
+        smtfile *= "(or"
+        for i ∈ 1:N
+            smtfile *= (" (= $(x.label) a$i)")
+        end
+        smtfile *= ") "
+        if isa(α, FiniteIndexTruth)
+            smtfile *= "(precedeq a$(α.index) $(x.label)) (forall (($(y.label) A)) (=> "
+            smtfile *= "(or"
+            for i ∈ 1:N
+                smtfile *= (" (= $(y.label) a$i)")
+            end
+            smtfile *= ") (= (precedeq $(x.label) $(y.label)) "
+            smetilfe *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
+            smtfile *= "(or"
+            for i ∈ 1:N
+                smtfile *= (" (= $(z.label) a$i)")
+            end
+            smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
+            smtfile *= "(or"
+            for i ∈ 1:N
+                smtfile *= (" (= $(t.label) a$i)")
+            end
+            smtfile *= ") $(translategeq(ψ, s, t, algebra, atoms, depth+1; solver))) "
+            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
+        elseif isa(α, FiniteTruth)
+            smtfile *= "(precedeq $(α.label) $(x.label)) (forall (($(y.label) A)) (=> "
+            smtfile *= "(or"
+            for i ∈ 1:N
+                smtfile *= (" (= $(y.label) a$i)")
+            end
+            smtfile *= ") (= (precedeq $(x.label) $(y.label)) "
+            smetilfe *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
+            smtfile *= "(or"
+            for i ∈ 1:N
+                smtfile *= (" (= $(z.label) a$i)")
+            end
+            smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
+            smtfile *= "(or"
+            for i ∈ 1:N
+                smtfile *= (" (= $(t.label) a$i)")
+            end
+            smtfile *= ") $(translategeq(ψ, s, t, algebra, atoms, depth+1; solver))) "
+            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
         else
             error("Something went wrong")
         end
@@ -373,9 +504,9 @@ end
         N
     }
 
-||φ∧ψ|| ⪯ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪯a)∧(||φ||_x⪯b)∧(a⋅b⪯α))
-||φ∨ψ|| ⪯ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪯a)∧(||φ||_x⪯b)∧(a+b⪯α))
-||φ→ψ|| ⪯ α = ∃a,b(A(a)∧A(b)∧(||φ||_x⪰a)∧(||φ||_x⪯b)∧(a↪b⪯α))
+τ(||φ∧ψ||_w) ⪯ α = ∃x,y(A(x)∧A(y)∧τ(||φ||_w⪯x)∧τ(||φ||_w⪯y)∧(x⋅y⪯α))
+τ(||φ∨ψ||_w) ⪯ α = ∃x,y(A(x)∧A(y)∧τ(||φ||_w⪯x)∧τ(||φ||_w⪯y)∧(x+y⪯α))
+τ(||φ→ψ||_w) ⪯ α = ∃x,y(A(x)∧A(y)∧τ(||φ||_w⪰x)∧τ(||φ||_w⪯y)∧(x↪y⪯α))
 """
 function translateleq(
     φ::SyntaxBranch,
@@ -389,50 +520,52 @@ function translateleq(
 }
     if isa(φ.token, typeof(∧)) || isa(φ.token, typeof(∨)) || isa(φ.token, typeof(→))
         (ψ, ε) = φ.children
-        (a, b) = FiniteTruth.(["a", "b"])
-        smtfile = "(exists ((a A) (b A)) (and "
+        (x, y) = FiniteTruth.(["x", "y"])
+        smtfile = "(exists ((x A) (y A)) (and "
         smtfile *= "(or"
         for i ∈ 1:N
-            smtfile *= (" (= a a$i)")
+            smtfile *= (" (= x a$i)")
         end
         smtfile *= ") (or"
         for i ∈ 1:N
-            smtfile *= (" (= b a$i)")
+            smtfile *= (" (= y a$i)")
         end
         smtfile *= ") "
         if isa(φ.token, typeof(∧))
-            smtfile *= "$(translateleq(ψ, w, a, algebra, atoms; solver)) "
-            smtfile *= "$(translateleq(ε, w, b, algebra, atoms; solver)) "
+            smtfile *= "$(translateleq(ψ, w, x, algebra, atoms, depth+1; solver)) "
+            smtfile *= "$(translateleq(ε, w, y, algebra, atoms, depth+2; solver)) "
             if isa(α, FiniteIndexTruth)
-                smtfile *= "(precedeq (monoid a b) a$(α.index))))"
+                smtfile *= "(precedeq (monoid x y) a$(α.index))))"
             elseif isa(α, FiniteTruth)
-                smtfile *= "(precedeq (monoid a b) $(α.label))))"
+                smtfile *= "(precedeq (monoid x y) $(α.label))))"
             else
                 error("Something went wrong")
             end
         elseif isa(φ.token, typeof(∨))
-            smtfile *= "$(translateleq(ψ, w, a, algebra, atoms; solver)) "
-            smtfile *= "$(translateleq(ε, w, b, algebra, atoms; solver)) "
+            smtfile *= "$(translateleq(ψ, w, x, algebra, atoms, depth+1; solver)) "
+            smtfile *= "$(translateleq(ε, w, y, algebra, atoms, depth+2; solver)) "
             if isa(α, FiniteIndexTruth)
-                smtfile *= "(precedeq (join a b) a$(α.index))))"
+                smtfile *= "(precedeq (join x y) a$(α.index))))"
             elseif isa(α, FiniteTruth)
-                smtfile *= "(precedeq (join a b) $(α.label))))"
+                smtfile *= "(precedeq (join x y) $(α.label))))"
             else
                 error("Something went wrong")
             end
         elseif isa(φ.token, typeof(→))
-            smtfile *= "$(translategeq(ψ, w, a, algebra, atoms; solver)) "
-            smtfile *= "$(translateleq(ε, w, b, algebra, atoms; solver)) "
+            smtfile *= "$(translategeq(ψ, w, x, algebra, atoms, depth+1; solver)) "
+            smtfile *= "$(translateleq(ε, w, y, algebra, atoms, depth+2; solver)) "
             if isa(α, FiniteIndexTruth)
-                smtfile *= "(precedeq (implication a b) a$(α.index))))"
+                smtfile *= "(precedeq (implication x y) a$(α.index))))"
             elseif isa(α, FiniteTruth)
-                smtfile *= "(precedeq (implication a b) $(α.label))))"
+                smtfile *= "(precedeq (implication x y) $(α.label))))"
             else
                 error("Something went wrong")
             end
         else
             error("Something went wrong")
         end
+    elseif isa(φ.token, DiamondRelationalConnective) || isa(φ.token, BoxRelationalConnective)
+        error("diamond or box")
     else
         error("Something went wrong")
     end    
