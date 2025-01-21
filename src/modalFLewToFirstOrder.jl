@@ -87,7 +87,8 @@ end
         φ::F,
         α::FiniteIndexTruth,
         algebra::FiniteIndexFLewAlgebra{N};
-        solver::String="z3"
+        solver::String="z3",
+        timeout::Union{Nothing, Int} = nothing
     ) where {
      F<:Formula,
      N
@@ -100,7 +101,8 @@ function translate(
     φ::F,
     α::FiniteIndexTruth,
     algebra::FiniteIndexFLewAlgebra{N};
-    solver::String="z3"
+    solver::String="z3",
+    timeout::Union{Nothing, Int} = nothing
 ) where {
     F<:Formula,
     N
@@ -129,10 +131,24 @@ function translate(
         end
     end
     smtfile *= "(define-fun precedeq ((x A) (y A)) Bool (= (meet x y) x))\n"
+
     # order
     smtfile *= "(declare-sort W)\n"
     smtfile *= "(declare-fun mveq (W W) A)\n"
     smtfile *= "(declare-fun mvlt (W W) A)\n"
+    smtfile *= "(assert (forall ((x W) (y W)) (and (or "
+    for i ∈ 1:N
+        smtfile *= "(= (mveq x y) a$i)" # =(x,y) = =(y,x) is checked later
+    end
+    smtfile *= ") (or "
+    for i ∈ 1:N
+        smtfile *= "(= (mvlt x y) a$i)"
+    end         
+    smtfile *= ") (or "
+    for i ∈ 1:N
+        smtfile *= "(= (mvlt y x) a$i)"
+    end        
+    smtfile *= "))))"
     # =(x,y) = 1 iff x = y
     smtfile *= "(assert (forall ((x W) (y W)) (= (= (mveq x y) a1) (= x y))))\n"
     # =(x,y) = =(y,x)    
@@ -151,7 +167,7 @@ function translate(
     smtfile *= "(=> (and (= (mvlt x y) a2) (= (mvlt y x) a2)) (= (mveq x y) a1))))\n"
     # if =(x,y) ≻ 0 then <(x,y) ≺ 1                       
     smtfile *= "(assert (forall ((x W) (y W)) "
-    smtfile *= "(=> (distinct (mveq x y) a2) (distinct (mvlt x y) a1))))\n"                                          
+    smtfile *= "(=> (distinct (mveq x y) a2) (distinct (mvlt x y) a1))))\n"
 
     w = Interval(Point("w0x"),Point("w0y"))
     atoms = Vector{Atom}()
@@ -160,7 +176,9 @@ function translate(
     for p ∈ atoms
         smtfile *= "(declare-fun $(p.value) (W W) A)\n"
     end
-    smtfile *= "(assert (exists (($(w.x.label) W) ($(w.y.label) W)) $(translation)))\n"
+    smtfile *= "(assert (exists (($(w.x.label) W) ($(w.y.label) W)) "
+    smtfile *= "(and (distinct (mvlt $(w.x.label) $(w.y.label)) a2) "
+    smtfile *= "$(translation))))\n"
 
     smtfile *= "(check-sat)"
     b = IOBuffer()
@@ -170,7 +188,11 @@ function translate(
         write(file, smtfile)
     end
     if solver == "z3"
-        run(pipeline(`z3 $(tempdir())/temp$uuid.smt2`, stdout = b))
+        if isnothing(timeout)
+            run(pipeline(`z3 $(tempdir())/temp$uuid.smt2`, stdout = b))
+        else
+            run(pipeline(`z3 $(tempdir())/temp$uuid.smt2 -t:$timeout`, stdout = b))
+        end
         rm("$(tempdir())/temp$uuid.smt2")
         return take!(b) == UInt8[0x73, 0x61, 0x74, 0x0a]
     else
@@ -184,7 +206,8 @@ end
         φ::F,
         α::T,
         algebra::A;
-        solver::String="z3"
+        solver::String="z3",
+        timeout::Union{Nothing, Int} = nothing
     ) where {
         T<:Truth,
         F<:Formula,
@@ -198,7 +221,8 @@ function translate(
     φ::F,
     α::T,
     a::A;
-    solver::String="z3"
+    solver::String="z3",
+    timeout::Union{Nothing, Int} = nothing
 ) where {
     T<:Truth,
     F<:Formula,
@@ -206,7 +230,7 @@ function translate(
 }
     if !isa(α, FiniteIndexTruth) α = convert(FiniteIndexTruth, α) end
     if !isa(a, FiniteIndexFLewAlgebra) a = convert(FiniteIndexFLewAlgebra, a) end
-    translate(φ, α, a; solver)
+    translate(φ, α, a; solver, timeout)
 end
 
 """
@@ -484,11 +508,12 @@ function translategeq(
             error("Something went wrong")
         end
         smtfile *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
+        smtfile *= "(and (distinct (mvlt $(s.x.label) $(s.y.label)) a2) "
         smtfile *= "(or"
         for i ∈ 1:N
             smtfile *= (" (= $(z.label) a$i)")
         end
-        smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
+        smtfile *= ")) (forall (($(t.label) A)) (=> (=> (and "
         smtfile *= "(or"
         for i ∈ 1:N
             smtfile *= (" (= $(t.label) a$i)")
@@ -497,12 +522,13 @@ function translategeq(
         counter[]+=1
         if isa(φ.token, DiamondRelationalConnective)
             smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
         elseif isa(φ.token, BoxRelationalConnective)
             smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(y.label) $(z.label)))))))))))"
         else
             error("Something went wrong")
         end
-        smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
     else
         error("Something went wrong")
     end 
@@ -620,11 +646,12 @@ function translateleq(
             error("Something went wrong")
         end
         smtfile *= "(forall (($(z.label) A) ($(s.x.label) W) ($(s.y.label) W)) (=> "
+        smtfile *= "(and (distinct (mvlt $(s.x.label) $(s.y.label)) a2) "
         smtfile *= "(or"
         for i ∈ 1:N
             smtfile *= (" (= $(z.label) a$i)")
         end
-        smtfile *= ") (forall (($(t.label) A)) (=> (=> (and "
+        smtfile *= ")) (forall (($(t.label) A)) (=> (=> (and "
         smtfile *= "(or"
         for i ∈ 1:N
             smtfile *= (" (= $(t.label) a$i)")
@@ -633,12 +660,13 @@ function translateleq(
         counter[]+=1
         if isa(φ.token, DiamondRelationalConnective)
             smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
         elseif isa(φ.token, BoxRelationalConnective)
             smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(y.label) $(z.label)))))))))))"
         else
             error("Something went wrong")
         end
-        smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
     else
         error("Something went wrong")
     end   
@@ -650,7 +678,8 @@ end
         α::T,
         φ::F,
         algebra::A;
-        solver::String="z3"
+        solver::String="z3",
+        timeout::Union{Nothing, Int} = nothing
     ) where {
         T<:Truth,
         F<:Formula,
@@ -664,20 +693,21 @@ function alphasat(
     α::T,
     φ::F,
     algebra::A;
-    solver::String="z3"
+    solver::String="z3",
+    timeout::Union{Nothing, Int} = nothing
 ) where {
     T<:Truth,
     F<:Formula,
     A<:AbstractAlgebra
 }
-    return translate(φ, α, algebra; solver)
+    return translate(φ, α, algebra; solver, timeout)
 end
 
 """
-    sat(φ::F, algebra::A; solver::String="z3")
+    sat(φ::F, algebra::A; solver::String="z3", timeout::Union{Nothing, Int} = nothing)
 
 Check 1-satisfiability of the formula `φ` using an smt solver (default=`z3`).
 """
-function sat(φ::F, algebra::A; solver::String="z3") where {F<:Formula, A<:AbstractAlgebra}
-    alphasat(⊤, φ, algebra; solver)
+function sat(φ::F, algebra::A; solver::String="z3", timeout::Union{Nothing, Int} = nothing) where {F<:Formula, A<:AbstractAlgebra}
+    alphasat(⊤, φ, algebra; solver, timeout)
 end

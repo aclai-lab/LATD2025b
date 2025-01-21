@@ -207,8 +207,8 @@ boxA = box(IA_A)
 diamondA = diamond(IA_A)
 boxA = box(IA_A)
 
-@test alphasat(α, diamondA(⊥), G3) == true  # ◊⊥ is always true
+@test alphasat(α, diamondA(⊥), G3) == false # ◊⊥ is always false
 @test alphasat(α, diamondA(⊤), G3) == true  # ◊⊤ is always true
-@test alphasat(α, boxA(⊥), G3) == false  # □(⊥) is always false
-@test alphasat(α, boxA(⊤), G3) == false  # □(⊤) is always true
+@test alphasat(α, boxA(⊥), G3) == false # □(⊥) is always false
+@test alphasat(α, boxA(⊤), G3) == true  # □(⊤) is always true
 @test alphasat(α, ∧(diamondA(p), boxA(→(p, ⊥))), G3) == false
