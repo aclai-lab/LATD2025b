@@ -20,7 +20,7 @@ BaseManyValuedConnectives = Union{typeof.(BASE_MANY_VALUED_CONNECTIVES)...}
 myalphabet = Atom.(["p", "q", "r"])
 
 min_height = 1
-max_height = 8
+max_height = 5
 max_it = 20000
 max_avg = 100
 max_timeout = 10 # seconds
@@ -32,7 +32,7 @@ using SoleLogics.ManyValuedLogics: FiniteIndexFLewAlgebra, FiniteIndexTruth
 algebras = [
     ("BA",   booleanalgebra, convert(FiniteIndexFLewAlgebra, booleanalgebra)),
     ("G3",   G3, convert(FiniteIndexFLewAlgebra, G3)),
-    # ("Ł3",   Ł3, convert(FiniteIndexFLewAlgebra, Ł3)),
+    ("Ł3",   Ł3, convert(FiniteIndexFLewAlgebra, Ł3)),
     # ("G4",   G4, convert(FiniteIndexFLewAlgebra, G4)),
     # ("Ł4",   Ł4, convert(FiniteIndexFLewAlgebra, Ł4)),
     # ("H4",   H4, convert(FiniteIndexFLewAlgebra, H4)),
@@ -45,7 +45,6 @@ algebras = [
 ]
 
 for a in algebras
-
     # Formula generation
     rng = initrng(Random.GLOBAL_RNG)
     aot = vcat(myalphabet,getdomain(a[2])) # atoms or truths
@@ -69,6 +68,7 @@ for a in algebras
     lpweights = StatsBase.uweights(length(leafpickers))
     leafpicker = (rng)->(StatsBase.sample(rng, leafpickers, lpweights))(rng)
 
+    # Confronting results with SoleReasoners tableau system
     for height in min_height:max_height
         j = 0
         for i in 1:max_it
