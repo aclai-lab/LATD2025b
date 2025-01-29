@@ -171,7 +171,7 @@ function translate(
 
     w = Interval(Point("w0x"),Point("w0y"))
     atoms = Vector{Atom}()
-    counter = Ref(0)
+    counter = Ref(1)
     translation = translategeq(φ, w, α, algebra, atoms, counter)
     for p ∈ atoms
         smtfile *= "(declare-fun $(p.value) (W W) A)\n"
@@ -514,7 +514,8 @@ function translategeq(
             smtfile *= (" (= $(z.label) a$i)")
         end
         # smtfile *= ")) (forall (($(t.label) A)) (=> (=> (and "
-        smtfile *= ")) (=> (forall (($(t.label) A)) (=> (and "
+        smtfile *= ")) (forall (($(t.label) A)) (=> (and (and "
+        # smtfile *= ")) (=> (forall (($(t.label) A)) (=> (and "
         smtfile *= "(or"
         for i ∈ 1:N
             smtfile *= (" (= $(t.label) a$i)")
@@ -522,15 +523,15 @@ function translategeq(
         smtfile *= ") $(translategeq(ψ, s, t, algebra, atoms, counter; solver))) "
         counter[]+=1
         if isa(φ.token, DiamondRelationalConnective)
-            # smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
-            # smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
-            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label)))) "
-            smtfile *= "(precedeq $(z.label) $(y.label))))))))))"
+            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
+            # smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label)))) "
+            # smtfile *= "(precedeq $(z.label) $(y.label))))))))))"
         elseif isa(φ.token, BoxRelationalConnective)
-            # smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
-            # smtfile *= "(precedeq $(y.label) $(z.label)))))))))))"
-            smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label)))) "
-            smtfile *= "(precedeq $(y.label) $(z.label))))))))))"
+            smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(y.label) $(z.label)))))))))))"
+            # smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label)))) "
+            # smtfile *= "(precedeq $(y.label) $(z.label))))))))))"
         else
             error("Something went wrong")
         end
@@ -657,7 +658,8 @@ function translateleq(
             smtfile *= (" (= $(z.label) a$i)")
         end
         # smtfile *= ")) (forall (($(t.label) A)) (=> (=> (and "
-        smtfile *= ")) (=> (forall (($(t.label) A)) (=> (and "
+        smtfile *= ")) (forall (($(t.label) A)) (=> (and (and "
+        # smtfile *= ")) (=> (forall (($(t.label) A)) (=> (and "
         smtfile *= "(or"
         for i ∈ 1:N
             smtfile *= (" (= $(t.label) a$i)")
@@ -665,15 +667,15 @@ function translateleq(
         smtfile *= ") $(translateleq(ψ, s, t, algebra, atoms, counter; solver))) "
         counter[]+=1
         if isa(φ.token, DiamondRelationalConnective)
-            # smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
-            # smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
-            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label)))) "
-            smtfile *= "(precedeq $(z.label) $(y.label))))))))))"
+            smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(z.label) $(y.label)))))))))))"
+            # smtfile *= "(= (monoid $(releval(r, w, s)) $(t.label)) $(z.label)))) "
+            # smtfile *= "(precedeq $(z.label) $(y.label))))))))))"
         elseif isa(φ.token, BoxRelationalConnective)
-            # smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
-            # smtfile *= "(precedeq $(y.label) $(z.label)))))))))))"
-            smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label)))) "
-            smtfile *= "(precedeq $(y.label) $(z.label))))))))))"
+            smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label))) "
+            smtfile *= "(precedeq $(y.label) $(z.label)))))))))))"
+            # smtfile *= "(= (implication $(releval(r, w, s)) $(t.label)) $(z.label)))) "
+            # smtfile *= "(precedeq $(y.label) $(z.label))))))))))"
         else
             error("Something went wrong")
         end
