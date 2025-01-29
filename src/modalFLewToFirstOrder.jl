@@ -191,7 +191,13 @@ function translate(
         if isnothing(timeout)
             run(pipeline(`z3 $(tempdir())/temp$uuid.smt2`, stdout = b))
         else
-            run(pipeline(`z3 $(tempdir())/temp$uuid.smt2 -t:$timeout`, stdout = b))
+            t0 = time_ns()
+            # When timeout, z3 always output false!
+            run(pipeline(`z3 $(tempdir())/temp$uuid.smt2 -T:$timeout`, stdout = b))
+            if (time_ns()-t0)/1e9 > timeout
+                println("Timeout reached!")
+                return nothing
+            end
         end
         rm("$(tempdir())/temp$uuid.smt2")
         return take!(b) == UInt8[0x73, 0x61, 0x74, 0x0a]

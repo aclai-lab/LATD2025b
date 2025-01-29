@@ -65,10 +65,10 @@ BaseManyValuedConnectives = Union{typeof.(BASE_MANY_VALUED_MODAL_CONNECTIVES)...
 
 myalphabet = Atom.(["p", "q", "r"])
 
-min_height = 2
+min_height = 1
 max_height = 5
-max_it = 2000
-max_avg = 50
+max_it = 20000
+max_avg = 100
 max_timeout = 30 # seconds
 verbose = true
 
@@ -123,8 +123,8 @@ for a in algebras
                 basecase=leafpicker,    # basecase=aotpicker
                 balanced=true
             )
-            verbose && println(f)
             if !isbot(t) && SoleLogics.height(f) == height
+                verbose && println(string(f) * " ⪰ " * string(t))
                 j += 1
                 brng = MersenneTwister(i)
                 r = mvhsalphasat(
