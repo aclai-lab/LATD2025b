@@ -160,7 +160,7 @@ for a in algebras
                     )
                     t3 = time_ns()
                     ###########################
-                    # @test r == r_translation    # test
+                    @test r == r_translation    # test
                     k += 1
                     tot_time_tableau += t1-t0
                     tot_time_translation += t3-t2
