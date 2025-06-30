@@ -1,7 +1,7 @@
 using SoleLogics
 using SoleLogics: AbstractAlgebra
 using SoleLogics.ManyValuedLogics
-using SoleLogics.ManyValuedLogics: FiniteIndexFLewAlgebra, FiniteIndexTruth
+using SoleLogics.ManyValuedLogics: FiniteFLewAlgebra, FiniteTruth
 using UUIDs
 
 struct Point
@@ -11,6 +11,10 @@ end
 struct Interval
     x::Point
     y::Point
+end
+
+struct TruthVariable
+    label::String
 end
 
 """
@@ -29,19 +33,19 @@ For every X ∈ {A, Ai, L, Li, B, Bi, E, Ei, D, Di, O, Oi} we have RX: I(D)×I(D
 
  - RA([x,y],[z,t]) = =(y,z)
  - RL([x,y],[z,t]) = <(y,z)
- - RB([x,y],[z,t]) = =(x,z) ∩ <(t,y)
- - RE([x,y],[z,t]) = <(x,z) ∩ =(y,t)
- - RD([x,y],[z,t]) = <(x,z) ∩ <(t,y)
- - RO([x,y],[z,t]) = <(x,z) ∩ <(z,y) ∩ <(y,t)
+ - RB([x,y],[z,t]) = =(x,z) . <(t,y)
+ - RE([x,y],[z,t]) = <(x,z) . =(y,t)
+ - RD([x,y],[z,t]) = <(x,z) . <(t,y)
+ - RO([x,y],[z,t]) = <(x,z) . <(z,y) . <(y,t)
 
 and similarly for the inverse relations:
 
 - RAi([x,y],[z,t]) = =(t,x)
 - RLi([x,y],[z,t]) = <(t,x)
-- RBi([x,y],[z,t]) = =(z,x) ∩ <(y,t)
-- REi([x,y],[z,t]) = <(z,x) ∩ =(t,y)
-- RDi([x,y],[z,t]) = <(z,x) ∩ <(y,t)
-- ROi([x,y],[z,t]) = <(z,x) ∩ <(x,t) ∩ <(y,t)
+- RBi([x,y],[z,t]) = =(z,x) . <(y,t)
+- REi([x,y],[z,t]) = <(z,x) . =(t,y)
+- RDi([x,y],[z,t]) = <(z,x) . <(y,t)
+- ROi([x,y],[z,t]) = <(z,x) . <(x,t) . <(y,t)
 """
 function releval(
     r::R,
@@ -85,8 +89,8 @@ end
 """
     translate(
         φ::F,
-        α::FiniteIndexTruth,
-        algebra::FiniteIndexFLewAlgebra{N};
+        α::FiniteTruth,
+        algebra::FiniteFLewAlgebra{N};
         solver::String="z3",
         timeout::Union{Nothing, Int} = nothing
     ) where {
@@ -99,8 +103,8 @@ first-order using smt-lib syntax and calling an smt-solver.
 """
 function translate(
     φ::F,
-    α::FiniteIndexTruth,
-    algebra::FiniteIndexFLewAlgebra{N};
+    α::FiniteTruth,
+    algebra::FiniteFLewAlgebra{N};
     solver::String="z3",
     timeout::Union{Nothing, Int} = nothing
 ) where {
@@ -151,10 +155,16 @@ function translate(
     smtfile *= "))))"
     # =(x,y) = 1 iff x = y
     smtfile *= "(assert (forall ((x W) (y W)) (= (= (mveq x y) a1) (= x y))))\n"
-    # =(x,y) = =(y,x)    
+    # =(x,y) = =(y,x) 
     smtfile *= "(assert (forall ((x W) (y W)) (= (mveq x y) (mveq y x))))\n" 
     # <(x,x) = 0       
-    smtfile *= "(assert (forall ((x W)) (= (mvlt x x) a2)))\n"      
+    # smtfile *= "(assert (forall ((x W)) (= (mvlt x x) a2)))\n"      
+    
+    # if <(x,y) = 1 ∩ <(y,z) = 1 then <(x,z) = 1
+    # smtfile *= "(assert (forall ((x W) (y W) (z W)) "
+    # smtfile *= "(=> (and (= (mvlt x y) a1) (= (mvlt y z) a1)) "
+    # smtfile *= "(= (mvlt x z) a1))))\n"
+    
     # <(x,z) ⪰ <(x,y) ⋅ <(y,z)                
     smtfile *= "(assert (forall ((x W) (y W) (z W)) "
     smtfile *= "(precedeq (monoid (mvlt x y) (mvlt y z)) (mvlt x z))))\n"   
@@ -162,6 +172,7 @@ function translate(
     smtfile *= "(assert (forall ((x W) (y W) (z W)) "
     smtfile *= "(=> (and (distinct (mvlt x y) a2) "
     smtfile *= "(distinct (mvlt y z) a2)) (distinct (mvlt x z) a2))))\n"
+    
     # if <(x,y) = 0 and <(y,x) = 0 then =(x,y) = 1          
     smtfile *= "(assert (forall ((x W) (y W)) "
     smtfile *= "(=> (and (= (mvlt x y) a2) (= (mvlt y x) a2)) (= (mveq x y) a1))))\n"
@@ -195,7 +206,7 @@ function translate(
             # When timeout, z3 always output false!
             run(pipeline(`z3 $(tempdir())/temp$uuid.smt2 -T:$timeout`, stdout = b))
             if (time_ns()-t0)/1e9 > timeout
-                println("Timeout reached!")
+                @warn "Timeout"
                 return nothing
             end
         end
@@ -234,8 +245,8 @@ function translate(
     F<:Formula,
     A<:AbstractAlgebra
 }
-    if !isa(α, FiniteIndexTruth) α = convert(FiniteIndexTruth, α) end
-    if !isa(a, FiniteIndexFLewAlgebra) a = convert(FiniteIndexFLewAlgebra, a) end
+    if !isa(α, FiniteTruth) α = convert(FiniteTruth, α) end
+    if !isa(a, FiniteFLewAlgebra) a = convert(FiniteFLewAlgebra, a) end
     translate(φ, α, a; solver, timeout)
 end
 
@@ -243,8 +254,8 @@ end
     translategeq(
         p::Atom,
         w::Interval,
-        α::Union{FiniteIndexTruth, FiniteTruth},
-        a::FiniteIndexFLewAlgebra{N},
+        α::Union{FiniteTruth, TruthVariable},
+        a::FiniteFLewAlgebra{N},
         atoms::Vector{Atom};
         solver::String="z3"
     ) where {
@@ -259,8 +270,8 @@ value of p at the world x.
 function translategeq(
     p::Atom,
     w::Interval,
-    α::Union{FiniteIndexTruth, FiniteTruth},
-    a::FiniteIndexFLewAlgebra{N},
+    α::Union{FiniteTruth, TruthVariable},
+    a::FiniteFLewAlgebra{N},
     atoms::Vector{Atom},
     counter::Ref{Int};
     solver::String="z3"
@@ -273,9 +284,9 @@ function translategeq(
         smtfile *= (" (= ($(p.value) $(w.x.label) $(w.y.label)) a$i)")
     end
     smtfile *= ") "
-    if isa(α, FiniteIndexTruth)
+    if isa(α, FiniteTruth)
         smtfile *= "(precedeq a$(α.index) ($(p.value) $(w.x.label) $(w.y.label))))"
-    elseif isa(α, FiniteTruth)
+    elseif isa(α, TruthVariable)
         smtfile *= "(precedeq $(α.label) ($(p.value) $(w.x.label) $(w.y.label))))"
     else
         error("Something went wrong")
@@ -287,8 +298,8 @@ end
     translateleq(
         p::Atom,
         w::Interval,
-        α::Union{FiniteIndexTruth, FiniteTruth},
-        a::FiniteIndexFLewAlgebra{N},
+        α::Union{FiniteTruth, TruthVariable},
+        a::FiniteFLewAlgebra{N},
         atoms::Vector{Atom};
         solver::String="z3"
     ) where {
@@ -303,8 +314,8 @@ value of p at the world x.
 function translateleq(
     p::Atom,
     w::Interval,
-    α::Union{FiniteIndexTruth, FiniteTruth},
-    a::FiniteIndexFLewAlgebra{N},
+    α::Union{FiniteTruth, TruthVariable},
+    a::FiniteFLewAlgebra{N},
     atoms::Vector{Atom},
     counter::Ref{Int};
     solver::String="z3"
@@ -317,9 +328,9 @@ function translateleq(
         smtfile *= (" (= ($(p.value) $(w.x.label) $(w.y.label)) a$i)")
     end
     smtfile *= ") "
-    if isa(α, FiniteIndexTruth)
+    if isa(α, FiniteTruth)
         smtfile *= "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) a$(α.index)))"
-    elseif isa(α, FiniteTruth)
+    elseif isa(α, TruthVariable)
         smtfile *= "(precedeq ($(p.value) $(w.x.label) $(w.y.label)) $(α.label)))"
     else
         error("Something went wrong")
@@ -331,8 +342,8 @@ end
     translategeq(
         β::T,
         w::Interval,
-        α::Union{FiniteIndexTruth, FiniteTruth},
-        a::FiniteIndexFLewAlgebra{N},
+        α::Union{FiniteTruth, TruthVariable},
+        a::FiniteFLewAlgebra{N},
         atoms::Vector{Atom},
         counter::Ref{Int};
         solver::String="z3"
@@ -346,8 +357,8 @@ end
 function translategeq(
     β::T,
     w::Interval,
-    α::Union{FiniteIndexTruth, FiniteTruth},
-    a::FiniteIndexFLewAlgebra{N},
+    α::Union{FiniteTruth, TruthVariable},
+    a::FiniteFLewAlgebra{N},
     atoms::Vector{Atom},
     counter::Ref{Int};
     solver::String="z3"
@@ -355,10 +366,10 @@ function translategeq(
     T<:Truth,
     N
 }
-    if !isa(β, FiniteIndexTruth) β = convert(FiniteIndexTruth, β) end
-    if isa(α, FiniteIndexTruth)
+    if !isa(β, FiniteTruth) β = convert(FiniteTruth, β) end
+    if isa(α, FiniteTruth)
         return "(precedeq a$(α.index) a$(β.index))"
-    elseif isa(α, FiniteTruth)
+    elseif isa(α, TruthVariable)
         return "(precedeq $(α.label) a$(β.index))"
     else
         error("Something went wrong")
@@ -369,8 +380,8 @@ end
     translateleq(
         β::T,
         w::Interval,
-        α::Union{FiniteIndexTruth, FiniteTruth},
-        a::FiniteIndexFLewAlgebra{N},
+        α::Union{FiniteTruth, TruthVariable},
+        a::FiniteFLewAlgebra{N},
         atoms::Vector{Atom},
         counter::Ref{Int};
         solver::String="z3"
@@ -384,18 +395,18 @@ end
 function translateleq(
     β::T,
     w::Interval,
-    α::Union{FiniteIndexTruth, FiniteTruth},
-    a::FiniteIndexFLewAlgebra,
+    α::Union{FiniteTruth, TruthVariable},
+    a::FiniteFLewAlgebra,
     atoms::Vector{Atom},
     counter::Ref{Int};
     solver::String="z3"
 ) where {
     T<:Truth
 }
-    if !isa(β, FiniteIndexTruth) β = convert(FiniteIndexTruth, β) end
-    if isa(α, FiniteIndexTruth)
+    if !isa(β, FiniteTruth) β = convert(FiniteTruth, β) end
+    if isa(α, FiniteTruth)
         return "(precedeq a$(β.index) a$(α.index))"
-    elseif isa(α, FiniteTruth)
+    elseif isa(α, TruthVariable)
         return "(precedeq a$(β.index) $(α.label))"
     else
         error("Something went wrong")
@@ -406,8 +417,8 @@ end
     function translategeq(
         φ::SyntaxBranch,
         w::Interval,
-        α::Union{FiniteIndexTruth, FiniteTruth},
-        algebra::FiniteIndexFLewAlgebra{N},
+        α::Union{FiniteTruth, TruthVariable},
+        algebra::FiniteFLewAlgebra{N},
         atoms::Vector{Atom},
         counter::Ref{Int};
         solver::String="z3"
@@ -422,8 +433,8 @@ end
 function translategeq(
     φ::SyntaxBranch,
     w::Interval,
-    α::Union{FiniteIndexTruth, FiniteTruth},
-    algebra::FiniteIndexFLewAlgebra{N},
+    α::Union{FiniteTruth, TruthVariable},
+    algebra::FiniteFLewAlgebra{N},
     atoms::Vector{Atom},
     counter::Ref{Int};
     solver::String="z3"
@@ -432,7 +443,7 @@ function translategeq(
 }
     if isa(φ.token, typeof(∧)) || isa(φ.token, typeof(∨)) || isa(φ.token, typeof(→))
         (ψ, ε) = φ.children
-        (x, y) = FiniteTruth.(["x$(counter[])", "y$(counter[])"])
+        (x, y) = TruthVariable.(["x$(counter[])", "y$(counter[])"])
         counter[]+=1
         smtfile = "(exists (($(x.label) A) ($(y.label) A)) (and "
         smtfile *= "(or"
@@ -449,9 +460,9 @@ function translategeq(
             counter[]+=1
             smtfile *= "$(translategeq(ε, w, y, algebra, atoms, counter; solver)) "
             counter[]+=1
-            if isa(α, FiniteIndexTruth)
+            if isa(α, FiniteTruth)
                 smtfile *= "(precedeq a$(α.index) (monoid $(x.label) $(y.label)))))"
-            elseif isa(α, FiniteTruth)
+            elseif isa(α, TruthVariable)
                 smtfile *= "(precedeq $(α.label) (monoid $(x.label) $(y.label)))))"
             else
                 error("Something went wrong")
@@ -461,9 +472,9 @@ function translategeq(
             counter[]+=1
             smtfile *= "$(translategeq(ε, w, y, algebra, atoms, counter; solver)) "
             counter[]+=1
-            if isa(α, FiniteIndexTruth)
+            if isa(α, FiniteTruth)
                 smtfile *= "(precedeq a$(α.index) (join $(x.label) $(y.label)))))"
-            elseif isa(α, FiniteTruth)
+            elseif isa(α, TruthVariable)
                 smtfile *= "(precedeq $(α.label) (join $(x.label) $(y.label)))))"
             else
                 error("Something went wrong")
@@ -473,9 +484,9 @@ function translategeq(
             counter[]+=1
             smtfile *= "$(translategeq(ε, w, y, algebra, atoms, counter; solver)) "
             counter[]+=1
-            if isa(α, FiniteIndexTruth)
+            if isa(α, FiniteTruth)
                 smtfile *= "(precedeq a$(α.index) (implication $(x.label) $(y.label)))))"
-            elseif isa(α, FiniteTruth)
+            elseif isa(α, TruthVariable)
                 smtfile *= "(precedeq $(α.label) (implication $(x.label) $(y.label)))))"
             else
                 error("Something went wrong")
@@ -487,7 +498,7 @@ function translategeq(
         r = SoleLogics.relation(φ.token)
         ψ = φ.children[1]
         s = Interval(Point("w$(counter[])x"), Point("w$(counter[])y"))
-        (x, y, z) = FiniteTruth.(["x$(counter[])", "y$(counter[])", "z$(counter[])"])
+        (x, y, z) = TruthVariable.(["x$(counter[])", "y$(counter[])", "z$(counter[])"])
         counter[]+=1
         smtfile = "(exists (($(x.label) A)) (and "
         smtfile *= "(or"
@@ -495,9 +506,9 @@ function translategeq(
             smtfile *= (" (= $(x.label) a$i)")
         end
         smtfile *= ") "
-        if isa(α, FiniteIndexTruth)
+        if isa(α, FiniteTruth)
             smtfile *= "(precedeq a$(α.index) $(x.label)) (forall (($(y.label) A)) (=> "
-        elseif isa(α, FiniteTruth)
+        elseif isa(α, TruthVariable)
             smtfile *= "(precedeq $(α.label) $(x.label)) (forall (($(y.label) A)) (=> "
         else
             error("Something went wrong")
@@ -540,8 +551,8 @@ end
     function translateleq(
         φ::SyntaxBranch,
         w::Interval,
-        α::Union{FiniteIndexTruth, FiniteTruth},
-        algebra::FiniteIndexFLewAlgebra{N},
+        α::Union{FiniteTruth, TruthVariable},
+        algebra::FiniteFLewAlgebra{N},
         atoms::Vector{Atom};
         solver::String="z3"
     ) where {
@@ -555,8 +566,8 @@ end
 function translateleq(
     φ::SyntaxBranch,
     w::Interval,
-    α::Union{FiniteIndexTruth, FiniteTruth},
-    algebra::FiniteIndexFLewAlgebra{N},
+    α::Union{FiniteTruth, TruthVariable},
+    algebra::FiniteFLewAlgebra{N},
     atoms::Vector{Atom},
     counter::Ref{Int};
     solver::String="z3"
@@ -565,7 +576,7 @@ function translateleq(
 }
     if isa(φ.token, typeof(∧)) || isa(φ.token, typeof(∨)) || isa(φ.token, typeof(→))
         (ψ, ε) = φ.children
-        (x, y) = FiniteTruth.(["x$(counter[])", "y$(counter[])"])
+        (x, y) = TruthVariable.(["x$(counter[])", "y$(counter[])"])
         counter[]+=1
         smtfile = "(exists (($(x.label) A) ($(y.label) A)) (and "
         smtfile *= "(or"
@@ -582,9 +593,9 @@ function translateleq(
             counter[]+=1
             smtfile *= "$(translateleq(ε, w, y, algebra, atoms, counter; solver)) "
             counter[]+=1
-            if isa(α, FiniteIndexTruth)
+            if isa(α, FiniteTruth)
                 smtfile *= "(precedeq (monoid $(x.label) $(y.label)) a$(α.index))))"
-            elseif isa(α, FiniteTruth)
+            elseif isa(α, TruthVariable)
                 smtfile *= "(precedeq (monoid $(x.label) $(y.label)) $(α.label))))"
             else
                 error("Something went wrong")
@@ -594,9 +605,9 @@ function translateleq(
             counter[]+=1
             smtfile *= "$(translateleq(ε, w, y, algebra, atoms, counter; solver)) "
             counter[]+=1
-            if isa(α, FiniteIndexTruth)
+            if isa(α, FiniteTruth)
                 smtfile *= "(precedeq (join $(x.label) $(y.label)) a$(α.index))))"
-            elseif isa(α, FiniteTruth)
+            elseif isa(α, TruthVariable)
                 smtfile *= "(precedeq (join $(x.label) $(y.label)) $(α.label))))"
             else
                 error("Something went wrong")
@@ -606,9 +617,9 @@ function translateleq(
             counter[]+=1
             smtfile *= "$(translateleq(ε, w, y, algebra, atoms, counter; solver)) "
             counter[]+=1
-            if isa(α, FiniteIndexTruth)
+            if isa(α, FiniteTruth)
                 smtfile *= "(precedeq (implication $(x.label) $(y.label)) a$(α.index))))"
-            elseif isa(α, FiniteTruth)
+            elseif isa(α, TruthVariable)
                 smtfile *= "(precedeq (implication $(x.label) $(y.label)) $(α.label))))"
             else
                 error("Something went wrong")
@@ -620,7 +631,7 @@ function translateleq(
         r = SoleLogics.relation(φ.token)
         ψ = φ.children[1]
         s = Interval(Point("w$(counter[])x"), Point("w$(counter[])y"))
-        (x, y, z) = FiniteTruth.(["x$(counter[])", "y$(counter[])", "z$(counter[])"])
+        (x, y, z) = TruthVariable.(["x$(counter[])", "y$(counter[])", "z$(counter[])"])
         counter[]+=1
         smtfile = "(exists (($(x.label) A)) (and "
         smtfile *= "(or"
@@ -628,9 +639,9 @@ function translateleq(
             smtfile *= (" (= $(x.label) a$i)")
         end
         smtfile *= ") "
-        if isa(α, FiniteIndexTruth)
+        if isa(α, FiniteTruth)
             smtfile *= "(precedeq $(x.label) a$(α.index)) (forall (($(y.label) A)) (=> "
-        elseif isa(α, FiniteTruth)
+        elseif isa(α, TruthVariable)
             smtfile *= "(precedeq $(x.label) $(α.label)) (forall (($(y.label) A)) (=> "
         else
             error("Something went wrong")

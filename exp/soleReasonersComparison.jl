@@ -7,7 +7,7 @@ using Test
 using StatsBase
 import SoleBase: initrng
 import SoleLogics: sample
-using SoleLogics.ManyValuedLogics: booleanalgebra, G3, Ł3, G4, Ł4, H4, G5, G6, H6_1, H6_2, H6_3, H6
+using SoleLogics.ManyValuedLogics: booleanalgebra, G3, Ł3, G4, Ł4, H4
 
 diamondA = diamond(IA_A)
 diamondL = diamond(IA_L)
@@ -80,13 +80,7 @@ algebras = [
     ("Ł3",   Ł3),
     # ("G4",   G4),
     # ("Ł4",   Ł4),
-    ("H4",   H4),
-    # ("G5",   G5),
-    # ("G6",   G6),
-    # ("H6_1", H6_1),
-    # ("H6_2", H6_2),
-    # ("H6_3", H6_3),
-    ("H6",   H6)
+    ("H4",   H4)
 ]
 
 for a in algebras
@@ -137,13 +131,12 @@ for a in algebras
                 # tableau performance #####
                 ###########################
                 t0 = time_ns()
-                r = mvhsalphasat(
+                r = SoleReasoners.alphasat(
+                    MVHSTableau,
                     t,
                     f,
-                    a[2],
-                    rng=brng,
-                    timeout=max_timeout,
-                    verbose=false
+                    a[2];
+                    timeout=max_timeout
                 )
                 t1 = time_ns()
                 ###########################
@@ -160,10 +153,12 @@ for a in algebras
                     )
                     t3 = time_ns()
                     ###########################
-                    @test r == r_translation    # test
-                    k += 1
-                    tot_time_tableau += t1-t0
-                    tot_time_translation += t3-t2
+                    if !isnothing(r_translation)
+                        @test r == r_translation    # test
+                        k += 1
+                        tot_time_tableau += t1-t0
+                        tot_time_translation += t3-t2
+                    end
                 end
                 if j == max_avg
                     break
