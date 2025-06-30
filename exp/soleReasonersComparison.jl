@@ -68,10 +68,10 @@ BaseManyValuedConnectives = Union{typeof.(BASE_MANY_VALUED_MODAL_CONNECTIVES)...
 myalphabet = Atom.(["p", "q", "r"])
 
 min_height = 1
-max_height = 5
+max_height = 6
 max_it = 20000
-max_avg = 20
-max_timeout = 30 # seconds
+max_avg = 100
+max_timeout = 60 # seconds
 verbose = false
 
 algebras = [
