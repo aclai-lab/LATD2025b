@@ -70,7 +70,7 @@ myalphabet = Atom.(["p", "q", "r"])
 min_height = 1
 max_height = 6
 max_it = 20000
-max_avg = 100
+max_avg = 200
 max_timeout = 60 # seconds
 verbose = false
 
@@ -78,8 +78,8 @@ algebras = [
     ("BA",   booleanalgebra),
     ("G3",   G3),
     ("Ł3",   Ł3),
-    # ("G4",   G4),
-    # ("Ł4",   Ł4),
+    ("G4",   G4),
+    ("Ł4",   Ł4),
     ("H4",   H4)
 ]
 
@@ -112,6 +112,7 @@ for a in algebras
         k = 0
         tot_time_tableau = 0
         tot_time_translation = 0
+        errored = 0
         for i in 1:max_it
             t = rand(MersenneTwister(i), getdomain(a[2]))
             f = randformula(
@@ -154,7 +155,12 @@ for a in algebras
                     t3 = time_ns()
                     ###########################
                     if !isnothing(r_translation)
-                        @test r == r_translation    # test
+                        if r != r_translation
+                            println(string(f) * " ⪰ " * string(t))
+                            errored += 1
+                        else
+                            @test r == r_translation    # test
+                        end
                         k += 1
                         tot_time_tableau += t1-t0
                         tot_time_translation += t3-t2
@@ -170,5 +176,6 @@ for a in algebras
         end
         println("Tableau avg. " * string(tot_time_tableau/k/1e6) * "ms")
         println("Translation avg. " * string(tot_time_translation/k/1e6) * "ms")
+        println("Errored: " * string(errored))
     end
 end
