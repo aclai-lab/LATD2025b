@@ -1,78 +1,60 @@
+using ModalFLewToFirstOrder
 using Random
 using SoleLogics
 using SoleLogics.ManyValuedLogics
-using ModalFLewToFirstOrder
 using SoleReasoners
-using Test
 using StatsBase
 import SoleBase: initrng
 import SoleLogics: sample
-using SoleLogics.ManyValuedLogics: booleanalgebra, G3, Ł3, G4, Ł4, H4
-
-diamondA = diamond(IA_A)
-diamondL = diamond(IA_L)
-diamondB = diamond(IA_B)
-diamondE = diamond(IA_E)
-diamondD = diamond(IA_D)
-diamondO = diamond(IA_O)
-diamondAi = diamond(IA_Ai)
-diamondLi = diamond(IA_Li)
-diamondBi = diamond(IA_Bi)
-diamondEi = diamond(IA_Ei)
-diamondDi = diamond(IA_Di)
-diamondOi = diamond(IA_Oi)
-boxA = box(IA_A)
-boxL = box(IA_L)
-boxB = box(IA_B)
-boxE = box(IA_E)
-boxD = box(IA_D)
-boxO = box(IA_O)
-boxAi = box(IA_Ai)
-boxLi = box(IA_Li)
-boxBi = box(IA_Bi)
-boxEi = box(IA_Ei)
-boxDi = box(IA_Di)
-boxOi = box(IA_Oi)
-
-BASE_MANY_VALUED_MODAL_CONNECTIVES = [
-    ∨,
-    ∧,
-    →,
-    diamondA,
-    diamondL,
-    diamondB,
-    diamondE,
-    diamondD,
-    diamondO,
-    diamondAi,
-    diamondLi,
-    diamondBi,
-    diamondEi,
-    diamondDi,
-    diamondOi,
-    boxA,
-    boxL,
-    boxB,
-    boxE,
-    boxD,
-    boxO,
-    boxAi,
-    boxLi,
-    boxBi,
-    boxEi,
-    boxDi,
-    boxOi
-]
-BaseManyValuedConnectives = Union{typeof.(BASE_MANY_VALUED_MODAL_CONNECTIVES)...}
 
 myalphabet = Atom.(["p", "q", "r"])
 
 min_height = 1
 max_height = 6
-max_it = 20000
+max_it = 99999
 max_avg = 200
 max_timeout = 60 # seconds
+
 verbose = false
+
+using SoleLogics: HS_A, HS_L, HS_B, HS_E, HS_D, HS_O
+using SoleLogics: HS_Ai, HS_Li, HS_Bi, HS_Ei, HS_Di, HS_Oi
+
+mvhsoperators = Vector{Connective}(BASE_MANY_VALUED_CONNECTIVES)
+append!(
+    mvhsoperators,
+    [
+        diamond(IA_A),
+        diamond(IA_L),
+        diamond(IA_B),
+        diamond(IA_E),
+        diamond(IA_D),
+        diamond(IA_O),
+        diamond(IA_Ai),
+        diamond(IA_Li),
+        diamond(IA_Bi),
+        diamond(IA_Ei),
+        diamond(IA_Di),
+        diamond(IA_Oi),
+        box(IA_A),
+        box(IA_L),
+        box(IA_B),
+        box(IA_E),
+        box(IA_D),
+        box(IA_O),
+        box(IA_Ai),
+        box(IA_Li),
+        box(IA_Bi),
+        box(IA_Ei),
+        box(IA_Di),
+        box(IA_Oi)
+    ]
+)
+mvhsopweights = [8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+
+using SoleLogics.ManyValuedLogics: booleanalgebra, G3, Ł3, G4, Ł4, H4
+using SoleLogics.ManyValuedLogics: G5, G6, H6_1, H6_2, H6_3, H6
+
 
 algebras = [
     ("BA",   booleanalgebra),
@@ -84,26 +66,32 @@ algebras = [
 ]
 
 for a in algebras
+    # Old formula generation
+    # rng = initrng(Random.GLOBAL_RNG)
+    # aot = vcat(myalphabet,getdomain(a[2])) # atoms or truths
+    # aotweights = StatsBase.uweights(length(myalphabet)+length(getdomain(a[2])))
+    # aotpicker = (rng)->StatsBase.sample(rng, aot, aotweights)
+    # atomweights = StatsBase.uweights(length(myalphabet))
+    # truthweights = StatsBase.uweights(length(getdomain(a[2])))
+    # leafpicker1 = (rng)->SyntaxTree(
+    #     →,
+    #     (StatsBase.sample(rng, myalphabet, atomweights)),
+    #     (StatsBase.sample(rng, getdomain(a[2]), truthweights))
+    # )
+    # leafpicker2 = (rng)->SyntaxTree(
+    #     →,
+    #     (StatsBase.sample(rng, getdomain(a[2]), truthweights)),
+    #     (StatsBase.sample(rng, myalphabet, atomweights))
+    # )
+    # leafpickers = [leafpicker1, leafpicker2]
+    # lpweights = StatsBase.uweights(length(leafpickers))
+    # leafpicker = (rng)->(StatsBase.sample(rng, leafpickers, lpweights))(rng)
+    
     # Formula generation
     rng = initrng(Random.GLOBAL_RNG)
     aot = vcat(myalphabet,getdomain(a[2])) # atoms or truths
     aotweights = StatsBase.uweights(length(myalphabet)+length(getdomain(a[2])))
     aotpicker = (rng)->StatsBase.sample(rng, aot, aotweights)
-    atomweights = StatsBase.uweights(length(myalphabet))
-    truthweights = StatsBase.uweights(length(getdomain(a[2])))
-    leafpicker1 = (rng)->SyntaxTree(
-        →,
-        (StatsBase.sample(rng, myalphabet, atomweights)),
-        (StatsBase.sample(rng, getdomain(a[2]), truthweights))
-    )
-    leafpicker2 = (rng)->SyntaxTree(
-        →,
-        (StatsBase.sample(rng, getdomain(a[2]), truthweights)),
-        (StatsBase.sample(rng, myalphabet, atomweights))
-    )
-    leafpickers = [leafpicker1, leafpicker2]
-    lpweights = StatsBase.uweights(length(leafpickers))
-    leafpicker = (rng)->(StatsBase.sample(rng, leafpickers, lpweights))(rng)
 
     # Confronting results with SoleReasoners tableau system
     for height in min_height:max_height
@@ -113,19 +101,29 @@ for a in algebras
         tot_time_tableau = 0
         tot_time_translation = 0
         errored = 0
+        tableau_timeout = 0
+        translation_timeout = 0
         for i in 1:max_it
             t = rand(MersenneTwister(i), getdomain(a[2]))
+            # f = randformula(
+            #     MersenneTwister(i),
+            #     height-1,
+            #     myalphabet,
+            #     BASE_MANY_VALUED_MODAL_CONNECTIVES,
+            #     opweights=StatsBase.uweights(length(BASE_MANY_VALUED_MODAL_CONNECTIVES)),
+            #     basecase=leafpicker,    # basecase=aotpicker
+            #     balanced=true
+            # )
             f = randformula(
                 MersenneTwister(i),
-                height-1,
+                height,
                 myalphabet,
-                BASE_MANY_VALUED_MODAL_CONNECTIVES,
-                opweights=StatsBase.uweights(length(BASE_MANY_VALUED_MODAL_CONNECTIVES)),
-                basecase=leafpicker,    # basecase=aotpicker
-                balanced=true
+                mvhsoperators,
+                opweights = mvhsopweights,
+                basecase = aotpicker,
+                mode = :full
             )
             if !isbot(t) && SoleLogics.height(f) == height
-                verbose && println(string(f) * " ⪰ " * string(t))
                 j += 1
                 brng = MersenneTwister(i)
                 ###########################
@@ -141,31 +139,33 @@ for a in algebras
                 )
                 t1 = time_ns()
                 ###########################
+                # translation performance #
+                ###########################
+                t2 = time_ns()
+                r_translation = ModalFLewToFirstOrder.alphasat(
+                    t,
+                    f,
+                    a[2];
+                    timeout=max_timeout
+                )
+                t3 = time_ns()
+                ###########################
                 if !isnothing(r)
-                    ###########################
-                    # translation performance #
-                    ###########################
-                    t2 = time_ns()
-                    r_translation = ModalFLewToFirstOrder.alphasat(
-                        t,
-                        f,
-                        a[2];
-                        timeout=max_timeout
-                    )
-                    t3 = time_ns()
-                    ###########################
                     if !isnothing(r_translation)
                         if r != r_translation
                             println(string(f) * " ⪰ " * string(t))
+                            println("Tableau: " * string(r) * "\tTranslation: " * string(r_translation))
                             flush(stdout)
                             errored += 1
-                        else
-                            @test r == r_translation    # test
                         end
                         k += 1
                         tot_time_tableau += t1-t0
                         tot_time_translation += t3-t2
+                    else
+                        translation_timeout += 1
                     end
+                else
+                    tableau_timeout += 1
                 end
                 if j == max_avg
                     break
@@ -177,6 +177,8 @@ for a in algebras
         end
         println("Tableau avg. " * string(tot_time_tableau/k/1e6) * "ms")
         println("Translation avg. " * string(tot_time_translation/k/1e6) * "ms")
+        println("Tableau timeouts: " * string(tableau_timeout))
+        println("Translation timeouts: " * string(translation_timeout))
         println("Errored: " * string(errored))
         flush(stdout)
     end

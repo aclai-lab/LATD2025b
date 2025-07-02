@@ -158,7 +158,7 @@ function translate(
     # =(x,y) = =(y,x) 
     smtfile *= "(assert (forall ((x W) (y W)) (= (mveq x y) (mveq y x))))\n" 
     # <(x,x) = 0       
-    # smtfile *= "(assert (forall ((x W)) (= (mvlt x x) a2)))\n"      
+    smtfile *= "(assert (forall ((x W)) (= (mvlt x x) a2)))\n"      
     
     # if <(x,y) = 1 ∩ <(y,z) = 1 then <(x,z) = 1
     # smtfile *= "(assert (forall ((x W) (y W) (z W)) "
