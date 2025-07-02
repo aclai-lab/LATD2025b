@@ -157,6 +157,7 @@ for a in algebras
                     if !isnothing(r_translation)
                         if r != r_translation
                             println(string(f) * " ⪰ " * string(t))
+                            flush(stdout)
                             errored += 1
                         else
                             @test r == r_translation    # test
@@ -177,5 +178,6 @@ for a in algebras
         println("Tableau avg. " * string(tot_time_tableau/k/1e6) * "ms")
         println("Translation avg. " * string(tot_time_translation/k/1e6) * "ms")
         println("Errored: " * string(errored))
+        flush(stdout)
     end
 end
